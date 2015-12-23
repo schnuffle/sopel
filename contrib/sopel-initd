@@ -1,48 +1,48 @@
 #!/bin/sh
 ### BEGIN INIT INFO
-# Provides: willie
+# Provides: sopel
 # Required-Start: $local_fs $remote_fs
 # Required-Stop: $local_fs $remote_fs
 # Should-Start: $network
 # Should-Stop: $network
 # Default-Start: 2 3 4 5
 # Default-Stop: 0 1 6
-# Short-Description: Willie IRC Bot.
-# Description: Start and stops the Willie IRC bot for a given user.
+# Short-Description: Sopel IRC Bot.
+# Description: Start and stops the sopel IRC bot for a given user.
 ### END INIT INFO
 
-# NOTE! Replace with the user you want to run Willie.
-willie_USER="yourusername"
+# NOTE! Replace with the user you want to run sopel.
+sopel_USER="yourusername"
 
-HOMEDIR=$(getent passwd $willie_USER | awk -F: '{print $6}')
-DAEMON="$HOMEDIR/Snakepit/willie/bin/willie"
-CONFIG="$HOMEDIR/.willie/default.cfg"
+HOMEDIR=$(getent passwd $sopel_USER | awk -F: '{print $6}')
+DAEMON="$HOMEDIR/Snakepit/sopel/bin/sopel"
+CONFIG="$HOMEDIR/.sopel/default.cfg"
 
 startd() {
     if [ -f ${CONFIG} ]; then
-        echo "Starting Willie for $willie_USER"
-        start-stop-daemon -c $willie_USER -u $willie_USER -x $DAEMON -S -- --config ${CONFIG} --fork --quiet
+        echo "Starting sopel for $sopel_USER"
+        start-stop-daemon -c $sopel_USER -u $sopel_USER -x $DAEMON -S -- --config ${CONFIG} --fork --quiet
     else
-        echo "Couldn't start Willie for $willie_USER (no $CONFIG found)"
+        echo "Couldn't start sopel for $sopel_USER (no $CONFIG found)"
     fi
 }
 
 stopd() {
-    echo "Stopping Willie for $willie_USER"
-    willie_PID=$(pgrep -fu $willie_USER $DAEMON)
-    if [ -z "$willie_PID" ]; then
-        echo "Willie for USER $willie_USER: not running."
+    echo "Stopping sopel for $sopel_USER"
+    sopel_PID=$(pgrep -fu $sopel_USER $DAEMON)
+    if [ -z "$sopel_PID" ]; then
+        echo "sopel for USER $sopel_USER: not running."
     else
-        kill -15 $willie_PID
+        kill -15 $sopel_PID
     fi
 }
 
 status() {
-    willie_PID=$(pgrep -fu $willie_USER $DAEMON)
-    if [ -z "$willie_PID" ]; then
-        echo "Willie for USER $willie_USER: not running."
+    sopel_PID=$(pgrep -fu $sopel_USER $DAEMON)
+    if [ -z "$sopel_PID" ]; then
+        echo "sopel for USER $sopel_USER: not running."
     else
-        echo "Willie for USER $willie_USER: running (pid $willie_PID)"
+        echo "sopel for USER $sopel_USER: running (pid $sopel_PID)"
     fi
 }
 
@@ -51,7 +51,7 @@ case "$1" in
     stop) stopd ;;
     restart|reload|force-reload) stopd && startd ;;
     status) status ;;
-    *) echo "Usage: /etc/init.d/willie {start|stop|reload|force-reload|restart|status}"
+    *) echo "Usage: /etc/init.d/sopel {start|stop|reload|force-reload|restart|status}"
        exit 1
        ;;
 esac
