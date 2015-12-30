@@ -33,11 +33,18 @@ import sopel.module
 class FloodSection(StaticSection):
     """ the number of message needed for the flood detection to kick in"""
     nb_messages = ValidatedAttribute('nb_messages', int, default=10)
+    """ the number of message needed for the flood detection to kick in"""
+    nb_messages2 = ValidatedAttribute('nb_messages2', int, default=10)
     """ the maximal time interval in seconds in which nb_messages can be posted
         before the flodd detection triggers """
     flood_interval = ValidatedAttribute('flood_interval', int, default=10)
+    """ the maximal time interval in seconds in which nb_messages can be posted
+        before the flodd detection triggers """
+    flood_interval2 = ValidatedAttribute('flood_interval2', int, default=10)
     """ the time in seconds a user will be muted """
     quiet_time   = ValidatedAttribute('quiet_time', int, default=20)
+    """ the time in seconds a user will be muted """
+    quiet_time2   = ValidatedAttribute('quiet_time2', int, default=20)
     """ debug_moed adds some exrta output for debuggin purposes """
     debug_mode   = ValidatedAttribute('debug_mode', bool, default=True)    
 
@@ -50,10 +57,19 @@ def configure(config):
         'nb_messages', "Number of posts after flood trigger is active."
     )
     config.flood.configure_setting(
+        'nb_messages2', "Number of posts after flood trigger is active."
+    )
+    config.flood.configure_setting(
         'flood_interval', "Time span in witch nb_messages posts trigger flood detection."
     )
     config.flood.configure_setting(
+        'flood_interval2', "Time span in witch nb_messages posts trigger flood detection."
+    )
+    config.flood.configure_setting(
         'quiet_time', "Time a user is muted."
+    )
+    config.flood.configure_setting(
+        'quiet_time2', "Time a user is muted."
     )
     config.flood.configure_setting(
         'debug_mode', "Turn on some extra infos"
@@ -65,8 +81,9 @@ def setup(bot=None):
         return
     bot.config.define_section('flood', FloodSection)
     bot.memory['messages_by_source'] = SopelMemory()
+    bot.memory['messages_by_source2'] = SopelMemory()    
     bot.memory['muted_users'] = SopelMemory()
-    
+    bot.memory['last_sent_warning'] = SopelMemory()
 
 
 
@@ -78,7 +95,6 @@ def mute_user(bot,trigger):
     channel= trigger.sender
     nick = trigger.nick
     bot.memory['muted_users'][nick] = [channel, nick, mute_mask, time.time(), bot.config.flood.quiet_time] 
-    bot.say('Muting %s' % mute_mask)
     bot.write(['MODE',channel, '+b m:%s' % mute_mask])
 
 def unmute_user(bot, nick):
@@ -98,7 +114,7 @@ def unban_loop(bot):
         if (time.time()-bantime > quiet_time):
             mute_mask = values[2]
             channel = values[0]
-            if debug_mode:
+            if debug_mode and "#test" in bot.channels:
                 bot.say('DEBUG: Unbanloop Unmuting nick %s with hostmask %s' % (nick,mute_mask), channel)            
             unmute_user(bot, nick)
             unmuted_list.append(nick)
@@ -121,8 +137,11 @@ def flood_detection(bot, trigger):
     
     # when user posts more then <nb_messages< in <interval> seconds, flooding is triggered
     nb_messages =  bot.config.flood.nb_messages
+    nb_messages2 =  bot.config.flood.nb_messages2
     interval =  bot.config.flood.flood_interval
+    interval2 =  bot.config.flood.flood_interval2
     quiet_time = bot.config.flood.quiet_time
+    quiet_time2 = bot.config.flood.quiet_time2
     debug_mode = bot.config.flood.debug_mode
     
     #bot.reply('Config is %s, %s, %s, %s' % (nb_messages,interval,quiet_time,debug_mode)) 
@@ -158,25 +177,33 @@ def flood_detection(bot, trigger):
 
     # put a timestamp for user and channel
     bot.memory['messages_by_source'].setdefault(channel, {}).setdefault(source, []).append(time.time())
+    bot.memory['messages_by_source2'].setdefault(channel, {}).setdefault(source, []).append(time.time())
+
     # keep nb_messages posts to be able to check for flooding
     bot.memory['messages_by_source'][channel][source] = bot.memory['messages_by_source'][channel][source][-int(nb_messages):]
+    bot.memory['messages_by_source2'][channel][source] = bot.memory['messages_by_source2'][channel][source][-int(nb_messages):]
     
     
     # check if source hits the flooding limits
-    if (len(bot.memory['messages_by_source'][channel][source]) == int(nb_messages)) and (time.time() - min(bot.memory['messages_by_source'][channel][source]) < int(interval)):
+    if (len(bot.memory['messages_by_source'][channel][source]) == int(nb_messages) and time.time() - min(bot.memory['messages_by_source'][channel][source]) < int(interval)) or (len(bot.memory['messages_by_source2'][channel][source]) == int(nb_messages2) and time.time() - min(bot.memory['messages_by_source2'][channel][source]) < int(interval2)): 
         #flooding detected
-        if debug_mode:
-            bot.say('Please stop db.set_nick_valueflooding', bot.config.core.owner)
+        if time.time() - bot.memory['last_sent_warning'].setdefault(source, 0) > 600:
+            bot.msg(source, "%s, Please don't paste in here when there's more than 3 lines. Use http://dpaste.com/ instead. Thank you !" % trigger.hostmask)
+            bot.memory['last_sent_warning'][source] = time.time()
         if not source in bot.memory['muted_users'].keys():
             if debug_mode:
                 bot.say('%s, you\'ll be muted for %s seconds' % (trigger.nick,quiet_time), source)
             mute_user(bot,trigger)
         else:
             bot.memory['muted_users'][source][4] = 2 * bot.memory['muted_users'][source][4]
-            bot.say('quiet time is doubled to %s for %s ' % (bot.memory['muted_users'][source][4],source))
-            #mute_user(bot,trigger)
+            if debug_mode:
+                bot.say('quiet time is doubled to %s for %s ' % (bot.memory['muted_users'][source][4],source))
     return
 
 @sopel.module.commands('listmuted','lm')
 def list_muted(bot,trigger):
     bot.reply('[ %s ]' % str(bot.memory['muted_users']), trigger.nick)
+    
+@sopel.module.commands('printconfig','pc')
+def print_config(bot,trigger):
+    bot.reply('[ nb_messages 1/2 = %s/%s, interval1/2 = %s/%s, quiet_time = %s ]' % (bot.config.flood.nb_messages,bot.config.flood.nb_messages2,bot.config.flood.flood_interval,bot.config.flood.flood_interval2,bot.config.flood.quiet_time))    
