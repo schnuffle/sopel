@@ -21,67 +21,93 @@ More info:
  * Phenny: http://inamidst.com/phenny/
  * Sopel: http://sopel.org/sopel/
 """
-from sopel.module import rule, priority, interval, commands, nickname_commands, example 
+
 import imp, os, re, time, threading
-from sopel.db import SopelDB
+from sopel.tools import Identifier, SopelMemory
+from sopel.config.types import (
+    StaticSection, ValidatedAttribute
+)
+import sopel.module
 
-current_warnings = {}
-messages_by_source  = {}
-last_sent_warning  = {}
-quiet_times  = {}
-muted_users = {}
 
-def setup(self):
-    fn = self.nick + '-' + self.config.core.host + '.flood.db'
-    self.flood_filename = os.path.join(self.config.core.homedir, fn)
-    if not os.path.exists(self.flood_filename):
-        try:
-            f = open(self.flood_filename, 'w')
-        except OSError:
-            pass
-        else:
-            f.write('')
-            f.close()
-    #self.memory['tell_lock'] = threading.Lock()
-    #self.memory['reminders'] = loadReminders(self.tell_filename, self.memory['tell_lock'])
+class FloodSection(StaticSection):
+    """ the number of message needed for the flood detection to kick in"""
+    nb_messages = ValidatedAttribute('nb_messages', int, default=10)
+    """ the maximal time interval in seconds in which nb_messages can be posted
+        before the flodd detection triggers """
+    flood_interval = ValidatedAttribute('flood_interval', int, default=10)
+    """ the time in seconds a user will be muted """
+    quiet_time   = ValidatedAttribute('quiet_time', int, default=20)
+    """ debug_moed adds some exrta output for debuggin purposes """
+    debug_mode   = ValidatedAttribute('debug_mode', bool, default=True)    
+
+def configure(config):
+    """ Declare a [flood] section in the config to store module
+        specific configuration values """
+    config.define_section('flood', FloodSection)
+    """ declare nb_messages parameter in seconds """
+    config.flood.configure_setting(
+        'nb_messages', "Number of posts after flood trigger is active."
+    )
+    config.flood.configure_setting(
+        'flood_interval', "Time span in witch nb_messages posts trigger flood detection."
+    )
+    config.flood.configure_setting(
+        'quiet_time', "Time a user is muted."
+    )
+    config.flood.configure_setting(
+        'debug_mode', "Turn on some extra infos"
+    )
+
+def setup(bot=None):
+   # TODO figure out why this is needed, and get rid of it, because really?
+    if not bot:
+        return
+    bot.config.define_section('flood', FloodSection)
+    bot.memory['messages_by_source'] = SopelMemory()
+    bot.memory['muted_users'] = SopelMemory()
+    
+
+
+
 
 def mute_user(bot,trigger):
-    global muted_users
     
     mute_host = trigger.hostmask.split("@")[1]
     mute_mask = "*!*@%s" % mute_host
     channel= trigger.sender
     nick = trigger.nick
-    muted_users[nick] = [channel, nick, mute_mask, time.time(), 30]
+    bot.memory['muted_users'][nick] = [channel, nick, mute_mask, time.time(), bot.config.flood.quiet_time] 
     bot.say('Muting %s' % mute_mask)
     bot.write(['MODE',channel, '+b m:%s' % mute_mask])
 
-def unmute_user(bot, mute_mask):
-    channel= muted_users[mute_mask][0]
+def unmute_user(bot, nick):
+    channel= bot.memory['muted_users'][nick][0]
+    mute_mask = bot.memory['muted_users'][nick][2]
     #bot.say('Unmuting %s' % mute_mask,channel)
     bot.write(['MODE',channel, '-b m:%s' % mute_mask])
 
-@interval(10)
-@priority('high')
+@sopel.module.interval(5)
 def unban_loop(bot):
-    global muted_users
     unmuted_list = []
+    debug_mode = bot.config.flood.debug_mode
     # check if any nicks quiet_time is finished and unmute
-    for nick,values in muted_users.items():
+    for nick,values in bot.memory['muted_users'].items():
         bantime = values[3]
         quiet_time = values[4]
         if (time.time()-bantime > quiet_time):
             mute_mask = values[2]
             channel = values[0]
-            bot.say('Unbanloop Unmuting nick %s with hostmask %s' % (nick,mute_mask), channel)            
-            unmute_user(bot, mute_mask)
-            unmuted_list.append(mute_mask)
-    for mask in unmuted_list:
-        del(muted_users[mask])
+            if debug_mode:
+                bot.say('DEBUG: Unbanloop Unmuting nick %s with hostmask %s' % (nick,mute_mask), channel)            
+            unmute_user(bot, nick)
+            unmuted_list.append(nick)
+    for delnick in unmuted_list:
+        del(bot.memory['muted_users'][nick])
     return
 
-@rule(r'(.*)')
-@priority('high')
+@sopel.module.rule(r'(.*)')
+@sopel.module.priority('high')
 def flood_detection(bot, trigger):
     """
     Listens to a channel for channel flooding. If one is found it first
@@ -91,18 +117,13 @@ def flood_detection(bot, trigger):
     User warnings are stored only in memory, and as a result
     restarting jenni will eliminate any warnings.
 
-    Currently bad words must be added to the config, as a future
-    addition bad words will be editable by admins using a command.
     """
-    global current_warnings
-    global messages_by_source
-    global last_sent_warning
-    global quiet_times
     
-    nb_messages =  3
-    interval =  5
-    quiet_time = 30
-    debug_mode = True
+    # when user posts more then <nb_messages< in <interval> seconds, flooding is triggered
+    nb_messages =  bot.config.flood.nb_messages
+    interval =  bot.config.flood.flood_interval
+    quiet_time = bot.config.flood.quiet_time
+    debug_mode = bot.config.flood.debug_mode
     
     #bot.reply('Config is %s, %s, %s, %s' % (nb_messages,interval,quiet_time,debug_mode)) 
 
@@ -135,30 +156,27 @@ def flood_detection(bot, trigger):
         bot.reply('We don\'t mute halfops')
         return
 
-
     # put a timestamp for user and channel
-    messages_by_source.setdefault(channel, {}).setdefault(source, []).append(time.time())
+    bot.memory['messages_by_source'].setdefault(channel, {}).setdefault(source, []).append(time.time())
     # keep nb_messages posts to be able to check for flooding
-    messages_by_source[channel][source] = messages_by_source[channel][source][-int(nb_messages):]
+    bot.memory['messages_by_source'][channel][source] = bot.memory['messages_by_source'][channel][source][-int(nb_messages):]
+    
     
     # check if source hits the flooding limits
-    if (len(messages_by_source[channel][source]) == int(nb_messages)) and (time.time() - min(messages_by_source[channel][source]) < int(interval)):
+    if (len(bot.memory['messages_by_source'][channel][source]) == int(nb_messages)) and (time.time() - min(bot.memory['messages_by_source'][channel][source]) < int(interval)):
         #flooding detected
-        if time.time() - last_sent_warning.setdefault(source, 0) > 600:
-            # send privmsg to stop behaviour if debug_mode is on
+        if debug_mode:
+            bot.say('Please stop db.set_nick_valueflooding', bot.config.core.owner)
+        if not source in bot.memory['muted_users'].keys():
             if debug_mode:
-                #jenni.say(bad_word_warning(bad_nick, bad_word_limit, current_warnings[bad_nick]))
-                bot.say('Please stop db.set_nick_valueflooding')
-        if not source in quiet_times:
-            quiet_times[source] = int(quiet_time)
-            if debug_mode:
-                bot.say('You\'ll be muted')
-            #bot.db.set_nick_value(trigger.nick,'startbantime', time.time())
+                bot.say('%s, you\'ll be muted for %s seconds' % (trigger.nick,quiet_time), source)
             mute_user(bot,trigger)
         else:
-            quiet_times[source] = 2 * quiet_times[source]
-            bot.say('quiet time is doubled to %s' % (quiet_times[source]))
-            mute_user(bot,trigger)
+            bot.memory['muted_users'][source][4] = 2 * bot.memory['muted_users'][source][4]
+            bot.say('quiet time is doubled to %s for %s ' % (bot.memory['muted_users'][source][4],source))
+            #mute_user(bot,trigger)
     return
 
-
+@sopel.module.commands('listmuted','lm')
+def list_muted(bot,trigger):
+    bot.reply('[ %s ]' % str(bot.memory['muted_users']), trigger.nick)
