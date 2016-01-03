@@ -22,7 +22,7 @@ More info:
  * Sopel: http://sopel.org/sopel/
 """
 
-import imp, os, re, time, threading
+import time, threading
 from sopel.tools import Identifier, SopelMemory
 from sopel.config.types import (
     StaticSection, ValidatedAttribute
@@ -44,7 +44,7 @@ class FloodSection(StaticSection):
     """ the time in seconds a user will be muted """
     quiet_time   = ValidatedAttribute('quiet_time', int, default=20)
     """ the time in seconds a user will be muted """
-    quiet_time2   = ValidatedAttribute('quiet_time2', int, default=20)
+    repeated_warnings_limit   = ValidatedAttribute('repeated_warnings_limit', int, default=0)
     """ debug_moed adds some exrta output for debuggin purposes """
     debug_mode   = ValidatedAttribute('debug_mode', bool, default=True)    
 
@@ -69,7 +69,7 @@ def configure(config):
         'quiet_time', "Time a user is muted."
     )
     config.flood.configure_setting(
-        'quiet_time2', "Time a user is muted."
+        'repeated_warnings_limit', "Number of warnings after which the user will be banned"
     )
     config.flood.configure_setting(
         'debug_mode', "Turn on some extra infos"
@@ -84,12 +84,15 @@ def setup(bot=None):
     bot.memory['messages_by_source2'] = SopelMemory()    
     bot.memory['muted_users'] = SopelMemory()
     bot.memory['last_sent_warning'] = SopelMemory()
-
-
+    bot.memory['muted_users'] = bot.db.get_channel_value( 
+    
+def shutdown(bot=None):
+    # save the actual muted users to db
+    for channel in bot.channels:
+        bot.db.set_channel_value(channel,'muted_users',bot.memory['muted_users'])
 
 
 def mute_user(bot,trigger):
-    
     mute_host = trigger.hostmask.split("@")[1]
     mute_mask = "*!*@%s" % mute_host
     channel= trigger.sender
@@ -141,19 +144,17 @@ def flood_detection(bot, trigger):
     interval =  bot.config.flood.flood_interval
     interval2 =  bot.config.flood.flood_interval2
     quiet_time = bot.config.flood.quiet_time
-    quiet_time2 = bot.config.flood.quiet_time2
     debug_mode = bot.config.flood.debug_mode
+    repeated_warnings_limit = bot.config.flood.repeated_warnings_limit
     
-    #bot.reply('Config is %s, %s, %s, %s' % (nb_messages,interval,quiet_time,debug_mode)) 
-
     # We only want to execute in a channel for which we have a wordlist
-#    if not trigger.sender.startswith("#") :
-#        return
+    if not trigger.sender.startswith("#") :
+        return
 
     # We don't want to warn or kickban admins
-    #if trigger.admin:
-    #    bot.reply('We don\'t mute admins')
-    #    return
+    if trigger.admin:
+        bot.reply('We don\'t mute admins')
+        return
 
     channel = trigger.sender
     source = trigger.nick
@@ -200,10 +201,25 @@ def flood_detection(bot, trigger):
                 bot.say('quiet time is doubled to %s for %s ' % (bot.memory['muted_users'][source][4],source))
     return
 
-@sopel.module.commands('listmuted','lm')
-def list_muted(bot,trigger):
+@sopel.module.commands('listfloodmuted','lfm')
+def listfloodmuted(bot,trigger):
+    """.listfloodmuted/lfm - list all nicks that are actually muted."""
     bot.reply('[ %s ]' % str(bot.memory['muted_users']), trigger.nick)
     
-@sopel.module.commands('printconfig','pc')
-def print_config(bot,trigger):
-    bot.reply('[ nb_messages 1/2 = %s/%s, interval1/2 = %s/%s, quiet_time = %s ]' % (bot.config.flood.nb_messages,bot.config.flood.nb_messages2,bot.config.flood.flood_interval,bot.config.flood.flood_interval2,bot.config.flood.quiet_time))    
+@sopel.module.commands('printfloodconfig','pfc')
+def printconfig(bot,trigger):
+    """.printfloodconfig/pfc - print all the flood dectection config paramters."""
+    bot.reply('[ nb_messages 1/2 = %s/%s, flood_interval1/2 = %s/%s, quiet_time = %s, repeated_warnings_limit = %s ]' % (bot.config.flood.nb_messages,bot.config.flood.nb_messages2,bot.config.flood.flood_interval,bot.config.flood.flood_interval2,bot.config.flood.quiet_time,bot.config.flood.repeated_warnings_limit))    
+    
+"""
+@sopel.module.commands('setfloodconfig','sfc')
+def setfloodconfig(bot,trigger):
+    """.setfloodconfig/sfc <paramter> <value> - set flood dectection config paramter."""
+    bot.reply('[ nb_messages 1/2 = %s/%s, flood_interval1/2 = %s/%s, quiet_time = %s, repeated_warnings_limit = %s ]' % (bot.config.flood.nb_messages,bot.config.flood.nb_messages2,bot.config.flood.flood_interval,bot.config.flood.flood_interval2,bot.config.flood.quiet_time,bot.config.flood.repeated_warnings_limit))        
+    text = trigger.group().split()
+    argc = len(text)
+    if argc < 2:
+        bot.reply('syntax: .sfc <paramter_name> <value>')
+        return
+    if bot.config.flood.
+"""
