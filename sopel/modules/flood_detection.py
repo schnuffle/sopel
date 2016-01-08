@@ -32,15 +32,15 @@ import sopel.module
 
 class FloodSection(StaticSection):
     """ the number of message needed for the flood detection to kick in"""
-    nb_messages = ValidatedAttribute('nb_messages', int, default=10)
+    nb_messages = ValidatedAttribute('nb_messages', int, default=3)
     """ the number of message needed for the flood detection to kick in"""
-    nb_messages2 = ValidatedAttribute('nb_messages2', int, default=10)
+    nb_messages2 = ValidatedAttribute('nb_messages2', int, default=5)
     """ the maximal time interval in seconds in which nb_messages can be posted
         before the flodd detection triggers """
-    flood_interval = ValidatedAttribute('flood_interval', int, default=10)
+    flood_interval = ValidatedAttribute('flood_interval', int, default=2)
     """ the maximal time interval in seconds in which nb_messages can be posted
         before the flodd detection triggers """
-    flood_interval2 = ValidatedAttribute('flood_interval2', int, default=10)
+    flood_interval2 = ValidatedAttribute('flood_interval2', int, default=8)
     """ the time in seconds a user will be muted """
     quiet_time   = ValidatedAttribute('quiet_time', int, default=20)
     """ the time in seconds a user will be muted """
@@ -99,16 +99,20 @@ def setup(bot=None):
             f.write('')
             f.close()
     bot.memory['muted_users_lock'] = threading.Lock()
-    #bot.memory['muted_users'] = loadMutedUsers(bot.muted_users_filename,bot.memory['muted_users_lock'])
-
+    #data = loadMutedUsers(bot.muted_users_filename,bot.memory['muted_users_lock'])
+    #for channel in bot.config.core.channels:
+    #    if channel in data:
+    #        bot.memory['muted_users'][channel] = data[channel]
+            
 def shutdown(bot=None):
     dumpMutedUsers(bot.muted_users_filename, bot.memory['muted_users'], bot.memory['muted_users_lock'])
 
 def mute_user(bot,trigger):
     mute_host = trigger.hostmask.split("@")[1]
-    mute_mask = "*!*@%s" % mute_host
-    channel= trigger.sender
     nick = trigger.nick
+    mute_mask = "%s!*@%s" % (nick,mute_host)
+    channel= trigger.sender
+    
 
     if bot.memory['muted_users'][channel].contains(nick):
         bot.memory['muted_users'][channel][nick] = [mute_mask, time.time(), bot.config.flood.quiet_time]   
@@ -117,12 +121,12 @@ def mute_user(bot,trigger):
             bot.say('%s, you\'ll be muted for %s seconds' % (trigger.nick,bot.config.flood.quiet_time), channel)
 
 def unmute_user(bot, channel, nick):
-    if bot.memory['muted_users'][channel].contains(nick):
         if len(bot.memory['muted_users'][channel][nick]) == 3:
+            if bot.config.flood.debug_mode:
+                bot.say('%s, will be unmuted ' % nick, channel)
             mute_mask = bot.memory['muted_users'][channel][nick][0]
             bot.write(['MODE',channel, '-b ', mute_mask])
             bot.memory['muted_users'][channel][nick] = []
-            #del(bot.memory['muted_users'][channel][nick])              
 
 def loadMutedUsers(fn, lock):
     lock.acquire()
@@ -249,7 +253,7 @@ def floodlistmuted(bot,trigger):
 @sopel.module.commands('floodload','fl')
 def floodload(bot,trigger):
     """".floodload/.fl - list muted users """
-    bot.memory['muted_users'] = loadMutedUsers(bot.muted_users_filename, bot.memory['muted_users_lock'])
+    bot.memory['muted_users'] = SopelMemory(loadMutedUsers(bot.muted_users_filename, bot.memory['muted_users_lock']))
     bot.reply('Loaded muted users!')
 
 @sopel.module.commands('floodsave','fs')

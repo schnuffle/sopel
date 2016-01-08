@@ -1,3 +1,4 @@
+
 # coding=utf-8
 """
 calc.py - Sopel Calculator Module
@@ -56,7 +57,10 @@ def py(bot, trigger):
 
     query = trigger.group(2)
     uri = BASE_TUMBOLIA_URI + 'py/'
-    answer = web.get(uri + web.quote(query))
+    try:
+        answer = web.get(uri + web.quote(query))
+    except:
+       answer = '%s timed out' % uri
     if answer:
         #bot.say can potentially lead to 3rd party commands triggering.
         bot.reply(answer)
