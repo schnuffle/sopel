@@ -18,7 +18,11 @@ As sopel doesn't offer this, i only kept the detection algo. The unmuting is don
 
 Or least that is the idea of my design :-)
 
-For the moment I still have some problems corretly declaring my dicts so that they don't change their type from SopelMemory to dict.
+The SopelMemory handling is based on what I learned from the reading some module code, like the tell module
+
+For the moment I still have some problems correctly declaring my dicts so that they don't change their type from SopelMemory to dict.
+
+One additional idea popped up dealing with the code. While I'm having fun, sorting out howto deal with threads in python, the easy solution would be to use the ChanServ akick command that can do all the heavy listing for us.
 
 The rest from this document is the normal sopel README
 
