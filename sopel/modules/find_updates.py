@@ -1,12 +1,11 @@
 # coding=utf-8
-"""
-find_updates.py - Update checking module for Sopel.
+"""Update checking module for Sopel.
 
 This is separated from version.py, so that it can be easily overridden by
 distribution packagers, and they can check their repositories rather than the
 Sopel website.
 """
-# Copyright 2014, Edward D. Powell, embolalia.net
+# Copyright 2014, Elsie Powell, embolalia.com
 # Licensed under the Eiffel Forum License 2.
 from __future__ import unicode_literals, absolute_import, print_function, division
 
@@ -30,7 +29,7 @@ unstable_message = (
 )
 
 
-@sopel.module.event(sopel.tools.events.LUSERCLIENT)
+@sopel.module.event(sopel.tools.events.RPL_LUSERCLIENT)
 @sopel.module.rule('.*')
 def startup_version_check(bot, trigger):
     global startup_check_run

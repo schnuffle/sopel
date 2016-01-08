@@ -1,10 +1,6 @@
 # coding=utf-8
-"""currency.py - Sopel Exchange Rate Module
-Copyright 2013 Edward Powell, embolalia.com
-Licensed under the Eiffel Forum License 2
-
-http://sopel.chat
-"""
+# Copyright 2013 Elsie Powell, embolalia.com
+# Licensed under the Eiffel Forum License 2
 from __future__ import unicode_literals, absolute_import, print_function, division
 
 import json
@@ -26,9 +22,10 @@ regex = re.compile(r'''
 
 
 def get_rate(code):
-    if code.upper() == 'CAD':
+    code = code.upper()
+    if code == 'CAD':
         return 1, 'Canadian Dollar'
-    elif code.upper() == 'BTC':
+    elif code == 'BTC':
         rates = json.loads(web.get('https://api.bitcoinaverage.com/ticker/all'))
         return 1 / rates['CAD']['24h_avg'], 'Bitcoin—24hr average'
 
@@ -36,8 +33,8 @@ def get_rate(code):
     if headers['_http_status'] == 404:
         return False, False
     namespaces = {
-        'http://www.cbwiki.net/wiki/index.php/Specification_1.1': 'cb', 
-        'http://purl.org/rss/1.0/': None, 
+        'http://www.cbwiki.net/wiki/index.php/Specification_1.1': 'cb',
+        'http://purl.org/rss/1.0/': None,
         'http://www.w3.org/1999/02/22-rdf-syntax-ns#': 'rdf' }
     xml = xmltodict.parse(data, process_namespaces=True, namespaces=namespaces).get('rdf:RDF')
     namestring = xml.get('channel').get('title').get('#text')
@@ -85,8 +82,8 @@ def display(bot, amount, of, to):
         return NOLIMIT
 
     result = amount / of_rate * to_rate
-    bot.say("{} {} ({}) = {} {} ({})".format(amount, of, of_name,
-                                             result, to, to_name))
+    bot.say("{} {} ({}) = {} {} ({})".format(amount, of.upper(), of_name,
+                                             result, to.upper(), to_name))
 
 
 @commands('btc', 'bitcoin')
