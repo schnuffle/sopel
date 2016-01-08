@@ -6,6 +6,23 @@ Introduction
 Sopel is a simple, lightweight, open source, easy-to-use IRC Utility bot,
 written in Python. It's designed to be easy to use, run and extend.
 
+This forks deals with trying to create a flood control module.
+As I do not define myself as being a software developper I tried to 
+find big shoulders to stand on :-), so mostly I ripped out ideas a
+concepts from various other projects, 
+I'll try to mention here:
+
+The flood detection algo is somehow ripped from cinnabot (https://github.com/glebihan/cinnabot/blob/master/Cinnabot/plugins/FloodDetection.py)
+That bot uses the irc module which offers a time delayed response, that is used to trigger the unmute command
+As sopel doesn't offer this, i only kept the detection algo. The unmuting is done in a seperate thread that gets it's action instruction through a threadsave dictionary.
+
+Or least that is the idea of my design :-)
+
+For the moment I still have some problems corretly declaring my dicts so that they don't change their type from SopelMemory to dict.
+
+The rest from this document is the normal sopel README
+
+
 Installation
 ------------
 
