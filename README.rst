@@ -6,7 +6,7 @@ Introduction
 Sopel is a simple, lightweight, open source, easy-to-use IRC Utility bot,
 written in Python. It's designed to be easy to use, run and extend.
 
-This forks deals with trying to create a flood control module.
+This fork deals with trying to create a flood control module.
 As I do not define myself as being a software developper I tried to 
 find big shoulders to stand on :-), so mostly I ripped out ideas a
 concepts from various other projects, 
