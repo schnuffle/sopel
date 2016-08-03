@@ -91,6 +91,37 @@ def startup(bot, trigger):
         for channel in bot.config.core.channels:
             bot.join(channel)
 
+    if (not bot.config.core.owner_account and
+            'account-tag' in bot.enabled_capabilities and
+            '@' not in bot.config.core.owner):
+        msg = (
+            "This network supports using network services to identify you as "
+            "my owner, rather than just matching your nickname. This is much "
+            "more secure. If you'd like to do this, make sure you're logged in "
+            "and reply with \"{}useserviceauth\""
+        ).format(bot.config.core.help_prefix)
+        bot.msg(bot.config.core.owner, msg)
+
+
+@sopel.module.require_privmsg()
+@sopel.module.require_owner()
+@sopel.module.commands('useserviceauth')
+def enable_service_auth(bot, trigger):
+    if bot.config.core.owner_account:
+        return
+    if 'account-tag' not in bot.enabled_capabilities:
+        bot.say('This server does not fully support services auth, so this '
+                'command is not available.')
+        return
+    if not trigger.account:
+        bot.say('You must be logged in to network services before using this '
+                'command.')
+        return
+    bot.config.core.owner_account = trigger.account
+    bot.config.save()
+    bot.say('Success! I will now use network services to identify you as my '
+            'owner.')
+
 
 @sopel.module.event(events.ERR_NOCHANMODES)
 @sopel.module.rule('.*')
@@ -315,6 +346,8 @@ def _send_who(bot, channel):
 @sopel.module.unblockable
 def track_join(bot, trigger):
     if trigger.nick == bot.nick and trigger.sender not in bot.channels:
+        bot.write(('TOPIC', trigger.sender))
+
         bot.privileges[trigger.sender] = dict()
         bot.channels[trigger.sender] = Channel(trigger.sender)
         _send_who(bot, trigger.sender)
@@ -324,6 +357,7 @@ def track_join(bot, trigger):
     user = bot.users.get(trigger.nick)
     if user is None:
         user = User(trigger.nick, trigger.user, trigger.host)
+        bot.users[trigger.nick] = user
     bot.channels[trigger.sender].add_user(user)
 
     if len(trigger.args) > 1 and trigger.args[1] != '*' and (
@@ -423,15 +457,20 @@ def recieve_cap_ls_reply(bot, trigger):
 
     # If some other module requests it, we don't need to add another request.
     # If some other module prohibits it, we shouldn't request it.
-    core_caps = ['multi-prefix', 'away-notify', 'cap-notify']
+    core_caps = ['multi-prefix', 'away-notify', 'cap-notify', 'server-time']
     for cap in core_caps:
         if cap not in bot._cap_reqs:
             bot._cap_reqs[cap] = [_CapReq('', 'coretasks')]
 
     def acct_warn(bot, cap):
-        LOGGER.info('Server does not support {}, or it conflicts with a custom '
-                    'module. User account validation unavailable or limited.'
-                    .format(cap[1:]))
+        LOGGER.info('Server does not support %s, or it conflicts with a custom '
+                    'module. User account validation unavailable or limited.',
+                    cap[1:])
+        if bot.config.core.owner_account or bot.config.core.admin_accounts:
+            LOGGER.warning(
+                'Owner or admin accounts are configured, but %s is not '
+                'supported by the server. This may cause unexpected behavior.',
+                cap[1:])
     auth_caps = ['account-notify', 'extended-join', 'account-tag']
     for cap in auth_caps:
         if cap not in bot._cap_reqs:
@@ -655,3 +694,19 @@ def track_notify(bot, trigger):
         bot.users[trigger.nick] = User(trigger.nick, trigger.user, trigger.host)
     user = bot.users[trigger.nick]
     user.away = bool(trigger.args)
+
+
+@sopel.module.rule('.*')
+@sopel.module.event('TOPIC')
+@sopel.module.event(events.RPL_TOPIC)
+@sopel.module.priority('high')
+@sopel.module.thread(False)
+@sopel.module.unblockable
+def track_topic(bot, trigger):
+    if trigger.event != 'TOPIC':
+        channel = trigger.args[1]
+    else:
+        channel = trigger.args[0]
+    if channel not in bot.channels:
+        return
+    bot.channels[channel].topic = trigger.args[-1]

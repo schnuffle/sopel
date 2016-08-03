@@ -177,7 +177,7 @@ def startmeeting(bot, trigger):
     if not os.path.isdir(meeting_log_path + trigger.sender):
         try:
             os.makedirs(meeting_log_path + trigger.sender)
-        except Exception as e:
+        except Exception:
             bot.say("Can't create log directory for this channel, meeting not started!")
             meetings_dict[trigger.sender] = Ddict(dict)
             raise
@@ -342,7 +342,7 @@ def meetinglink(bot, trigger):
     if not link.startswith("http"):
         link = "http://" + link
     try:
-        title = find_title(link)
+        title = find_title(link, verify=bot.config.core.verify_ssl)
     except:
         title = ''
     logplain('LINK: %s [%s]' % (link, title), trigger.sender)
